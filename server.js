@@ -1,33 +1,29 @@
 // server.js
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const path = require("path");
-
+const express = require('express');
+const path = require('path');
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, "public")));
+// static フォルダ（例: build や public）を正しく指定する
+// React の場合: const staticDir = path.join(__dirname, 'build');
+// SPA ビルド出力先に合わせて変更してください
+const staticDir = path.join(__dirname, 'build');
 
-io.on("connection", socket => {
-  console.log("client connected:", socket.id);
+app.use(express.static(staticDir));
 
-  socket.on("join", room => {
-    socket.join(room);
-    console.log(`${socket.id} joined ${room}`);
-  });
-
-  socket.on("sensor", data => {
-    io.to("game").emit("sensor", data);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("client disconnected:", socket.id);
+// SPA の場合、全ての未マッチに index.html を返す
+app.get('*', (req, res) => {
+  res.sendFile(path.join(staticDir, 'index.html'), err => {
+    if (err) {
+      console.error('sendFile error:', err);
+      res.status(500).send('Server error');
+    }
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Render が割り当てるポートを使う。0.0.0.0 でバインドしておくと確実。
+const port = process.env.PORT || 10000;
+const host = process.env.HOST || '0.0.0.0';
+
+app.listen(port, host, () => {
+  console.log(`Server running on ${host}:${port}`);
 });
