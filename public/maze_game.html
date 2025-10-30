@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>傾けて迷路！3Dボールゲーム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"></script>
+  </head>
+
+  <body>
+    <h1>傾けてゴール！迷路ゲーム</h1>
+    <div>
+      <div>あなたのID: <span id="myid"></span></div>
+      <button id="connect">ルームに入る</button>
+      <div>スマホを傾けてボールを転がそう！</div>
+    </div>
+
+    <script>
+      // ==== 通信関連 ====
+      let socket = io.connect();
+      let btn = document.querySelector("#connect");
+      let myid = sessionStorage.getItem("clientId");
+      if (!myid) {
+        myid = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem("clientId", myid);
+      }
+      document.querySelector("#myid").innerHTML = myid;
+
+      let g = 0; // スマホ横傾き
+      let b = 0; // スマホ縦傾き
+
+      btn.addEventListener("click", function () {
+        socket.emit("join", "game");
+        btn.remove();
+      });
+
+      socket.on("sensor", function (data) {
+        g = parseFloat(data.g);
+        b = parseFloat(data.b);
+      });
+
+      // ==== ゲーム設定 ====
+      let ball = { x: -350, y: -350, z: 20, r: 20, vx: 0, vy: 0 };
+      let speed = 0.4;
+      let friction = 0.98;
+      let walls = [];
+      let goal = { x: 300, y: 300, r: 40 };
+      let gameOver = false;
+      let gameClear = false;
+
+      function setup() {
+        createCanvas(800, 800, WEBGL);
+        noStroke();
+
+        // 簡単な迷路を設定（x, y, w, h）
+        walls = [
+          { x: 0, y: -350, w: 800, h: 20 },
+          { x: 0, y: 350, w: 800, h: 20 },
+          { x: -350, y: 0, w: 20, h: 800 },
+          { x: 350, y: 0, w: 20, h: 800 },
+          { x: -150, y: 0, w: 300, h: 20 },
+          { x: 150, y: 100, w: 20, h: 400 },
+          { x: -100, y: 200, w: 200, h: 20 },
+          { x: 200, y: -200, w: 20, h: 300 },
+        ];
+      }
+
+      function draw() {
+        background(20);
+        ambientLight(120);
+        pointLight(255, 255, 255, 0, 0, 500);
+        camera(0, 700, 500, 0, 0, 0, 0, 1, 0);
+        rotateX(PI / 4);
+
+        if (gameClear) {
+          drawClear();
+          return;
+        }
+
+        // 盤面（床）
+        push();
+        fill(100);
+        translate(0, 0, -10);
+        box(800, 800, 20);
+        pop();
+
+        // ゴール
+        push();
+        translate(goal.x, goal.y, -5);
+        fill(0, 200, 0);
+        cylinder(goal.r, 10);
+        pop();
+
+        // 壁の描画
+        for (let w of walls) {
+          push();
+          translate(w.x, w.y, 0);
+          fill(180, 60, 60);
+          box(w.w, w.h, 40);
+          pop();
+        }
+
+        // ボール物理
+        ball.vx += g * speed;
+        ball.vy += b * speed;
+
+        ball.vx *= friction;
+        ball.vy *= friction;
+
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // 壁との当たり判定
+        for (let w of walls) {
+          if (
+            abs(ball.x - w.x) < w.w / 2 + ball.r &&
+            abs(ball.y - w.y) < w.h / 2 + ball.r
+          ) {
+            // 衝突：反射的に戻す
+            if (abs(ball.x - w.x) > abs(ball.y - w.y)) {
+              ball.x -= ball.vx * 2;
+              ball.vx *= -0.5;
+            } else {
+              ball.y -= ball.vy * 2;
+              ball.vy *= -0.5;
+            }
+          }
+        }
+
+        // ゴール判定
+        let dx = ball.x - goal.x;
+        let dy = ball.y - goal.y;
+        let distToGoal = sqrt(dx * dx + dy * dy);
+        if (distToGoal < goal.r - ball.r) {
+          gameClear = true;
+        }
+
+        // ボール描画
+        push();
+        translate(ball.x, ball.y, ball.z);
+        fill(255, 220, 0);
+        specularMaterial(255, 255, 100);
+        sphere(ball.r);
+        pop();
+      }
+
+      function drawClear() {
+        fill(0, 255, 100);
+        textAlign(CENTER, CENTER);
+        textSize(48);
+        text("🎉 CLEAR!! 🎉", 0, 0);
+        textSize(24);
+        text("おめでとう！リロードで再挑戦！", 0, 60);
+      }
+    </script>
+  </body>
+</html>
